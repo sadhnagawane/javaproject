@@ -1,0 +1,349 @@
+
+//Models/Category.cs:////
+
+using System.ComponentModel.DataAnnotations;
+
+namespace MvcTest.Models
+{
+    public class Category
+    {
+        public int Id { get; set; }
+
+        [Required]
+        [StringLength(50)]
+        public string Name { get; set; }
+    }
+}
+
+
+/////Models/Product.cs://////
+
+
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace MvcTest.Models
+{
+    public class Product
+    {
+        public int Id { get; set; }
+
+        [Required]
+        [StringLength(50)]
+        public string Name { get; set; }
+
+        [ForeignKey("Category")]
+        public int CategoryId { get; set; }
+
+        public Category Category { get; set; }
+    }
+}
+
+
+////Controllers/CategoryController.cs:////
+
+
+using System.Data.Entity;
+using System.Linq;
+using System.Net;
+using System.Web.Mvc;
+using MvcTest.Models;
+
+namespace MvcTest.Controllers
+{
+    public class CategoryController : Controller
+    {
+        private ApplicationDbContext db = new ApplicationDbContext();
+
+        // GET: Category
+        public ActionResult Index()
+        {
+            return View(db.Categories.ToList());
+        }
+
+        // GET: Category/Create
+        public ActionResult Create()
+        {
+            return View();
+        }
+
+        // POST: Category/Create
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult Create([Bind(Include = "Name")] Category category)
+        {
+            if (ModelState.IsValid)
+            {
+                db.Categories.Add(category);
+                db.SaveChanges();
+                return RedirectToAction("Index");
+            }
+
+            return View(category);
+        }
+
+        // GET: Category/Edit/5
+        public ActionResult Edit(int? id)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            Category category = db.Categories.Find(id);
+            if (category == null)
+            {
+                return HttpNotFound();
+            }
+            return View(category);
+        }
+
+        // POST: Category/Edit/5
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult Edit([Bind(Include = "Id,Name")] Category category)
+        {
+            if (ModelState.IsValid)
+            {
+                db.Entry(category).State = EntityState.Modified;
+                db.SaveChanges();
+                return RedirectToAction("Index");
+            }
+            return View(category);
+        }
+
+        // GET: Category/Delete/5
+        public ActionResult Delete(int? id)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            Category category = db.Categories.Find(id);
+            if (category == null)
+            {
+                return HttpNotFound();
+            }
+            return View(category);
+        }
+
+        // POST: Category/Delete/5
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public ActionResult DeleteConfirmed(int id)
+        {
+            Category category = db.Categories.Find(id);
+            db.Categories.Remove(category);
+            db.SaveChanges();
+            return RedirectToAction("Index");
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                db.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+    }
+}
+
+
+
+
+
+/////ProductController.cs file:////
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Web;
+using System.Web.Mvc;
+using MvcMachineTest.Models;
+
+namespace MvcMachineTest.Controllers
+{
+    public class ProductController : Controller
+    {
+        private readonly ApplicationDbContext db;
+
+        public ProductController()
+        {
+            db = new ApplicationDbContext();
+        }
+
+        // GET: Product
+        public ActionResult Index(int? categoryId, string search, int? page)
+        {
+            const int pageSize = 10;
+
+            var products = db.Products.Include("Category").AsQueryable();
+
+            if (categoryId.HasValue)
+            {
+                products = products.Where(p => p.CategoryId == categoryId.Value);
+            }
+
+            if (!string.IsNullOrEmpty(search))
+            {
+                products = products.Where(p => p.ProductName.Contains(search));
+            }
+
+            var count = products.Count();
+            var currentPage = page ?? 1;
+
+            var totalPages = (int)Math.Ceiling(count / (double)pageSize);
+
+            if (totalPages > 0 && currentPage > totalPages)
+            {
+                currentPage = totalPages;
+            }
+
+            var skipCount = (currentPage - 1) * pageSize;
+            products = products.OrderBy(p => p.ProductName).Skip(skipCount).Take(pageSize);
+
+            var model = new ProductViewModel
+            {
+                Products = products.ToList(),
+                Categories = db.Categories.ToList(),
+                CategoryId = categoryId,
+                Search = search,
+                Pager = new Pager(count, currentPage, pageSize)
+            };
+
+            return View(model);
+        }
+
+        // GET: Product/Details/5
+        public ActionResult Details(int id)
+        {
+            var product = db.Products.Find(id);
+
+            if (product == null)
+            {
+                return HttpNotFound();
+            }
+
+            return View(product);
+        }
+
+        // GET: Product/Create
+        public ActionResult Create()
+        {
+            ViewBag.CategoryId = new SelectList(db.Categories, "Id", "CategoryName");
+            return View();
+        }
+
+        // POST: Product/Create
+        [HttpPost]
+        public ActionResult Create(Product product)
+        {
+            if (ModelState.IsValid)
+            {
+                db.Products.Add(product);
+                db.SaveChanges();
+                return RedirectToAction("Index");
+            }
+
+            ViewBag.CategoryId = new SelectList(db.Categories, "Id", "CategoryName", product.CategoryId);
+            return View(product);
+        }
+
+        // GET: Product/Edit/5
+        public ActionResult Edit(int id)
+        {
+            var product = db.Products.Find(id);
+
+            if (product == null)
+            {
+                return HttpNotFound();
+            }
+
+            ViewBag.CategoryId = new SelectList(db.Categories, "Id", "CategoryName", product.CategoryId);
+            return View(product);
+        }
+
+        // POST: Product/Edit/5
+        [HttpPost]
+        public ActionResult Edit(Product product)
+        {
+            if (ModelState.IsValid)
+            {
+                db.Entry(product).State = System.Data.Entity.EntityState.Modified;
+                db.SaveChanges();
+                return RedirectToAction("Index");
+            }
+
+            ViewBag.CategoryId = new SelectList(db.Categories, "Id", "CategoryName", product.CategoryId);
+            return View(product);
+        }
+
+        // GET: Product/Delete/5
+        public ActionResult Delete(int id)
+        {
+            var product = db.Products.Find(id);
+
+            if (product == null)
+            {
+                return HttpNotFound();
+            }
+
+            return View(product);
+        }
+
+        // POST: Product/Delete/5
+        [HttpPost, ActionName("Delete")]
+        public ActionResult DeleteConfirmed(int id)
+        {
+            var product = db.Products.Find(id);
+            db.Products.Remove(product);
+            db.SaveChanges();
+            return RedirectToAction("Index");
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                db.Dispose();
+            }
+
+///////html code///
+@model ProductListViewModel
+
+<table>
+    <thead>
+        <tr>
+            <th>Product Id</th>
+            <th>Product Name</th>
+            <th>Category Id</th>
+            <th>Category Name</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var product in Model.Products)
+        {
+            <tr>
+                <td>@product.ProductId</td>
+                <td>@product.ProductName</td>
+                <td>@product.CategoryId</td>
+                <td>@product.CategoryName</td>
+            </tr>
+        }
+
+////pagenation code///
+
+
+public ActionResult Index(int? page)
+{
+    int pageSize = 10;
+    int pageNumber = (page ?? 1);
+
+    var products = db.Products.Include(p => p.Category)
+                    .OrderBy(p => p.ProductId)
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+
+    return View(products);
+}
